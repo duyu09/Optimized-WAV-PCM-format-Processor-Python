@@ -1,5 +1,40 @@
 # Copyright (c) 2022 Qilu University of Technology, School of Computer Science & Technology, Duyu (No.202103180009).
-# version 3.0/v3.1
+# Copyright (c) 2010 Bill Cox. (Sonic Library)
+# Version 3.2
+
+
+import ctypes
+from sys import argv
+from sys import stderr
+from sys import exit
+from numpy import append as npappend
+from numpy import zeros as npzeros
+from numpy import float64 as npfloat64
+from numpy import float32 as npfloat32
+from numpy import int16 as npint16
+from numpy import int32 as npint32
+from numpy import array as nparray
+from numpy import linspace as nplinspace
+from numpy import insert as npinsert
+from numpy import vstack as npvstack
+from numpy import divide as npdivide
+from numpy import add as npadd
+from numpy import log10 as nplog10
+from numpy import clip as npclip
+from numpy import abs as npabs
+from numpy import interp as npinterp
+from numpy import arange as nparange
+from numpy.fft import rfft as nprfft
+from numpy.ctypeslib import ndpointer
+from scipy.signal import medfilt
+from scipy.io.wavfile import read as wavRead
+from scipy.io.wavfile import write as wavWrite
+from pylab import plot
+from pylab import figure
+from pylab import xlabel
+from pylab import ylabel
+from pylab import show
+from warnings import filterwarnings
 
 
 def getTypeFactor(gtf_dataType):
@@ -20,15 +55,12 @@ def reverb_funDefault(musicDataArr, volumeDb, offsetSample):
 
 def readPcmWavData(inputWavFileName_Original):
     print("[STEPS]Reading WAV data...")
-    from scipy.io.wavfile import read as wavRead
     SampleRate_Original = 0
     MusicData = []
     try:
         SampleRate_Original, MusicData = wavRead(inputWavFileName_Original)
     except Exception:
-        from sys import stderr
-        from sys import exit
-        print("[ERROR]Read WAV file failed.",file=stderr)
+        print("[ERROR]Read WAV file failed.", file=stderr)
         exit(1)
     readWavData_left = []
     readWavData_right = []
@@ -48,8 +80,6 @@ def readPcmWavData(inputWavFileName_Original):
 def writePcmWavData(write_outputWavFileName, write_left, write_right, write_SampleRate, write_dataType,
                     sampleRate_Factor=0, isFilter=False, FilterDistance=7):
     print("[STEPS]Writing WAV data...")
-    from scipy.io.wavfile import write as wavWrite
-    from numpy import vstack as npvstack
     if not sampleRate_Factor == 0:
         write_left = write_left[range(0, len(write_left) - 1, sampleRate_Factor)]
         write_right = write_right[range(0, len(write_right) - 1, sampleRate_Factor)]
@@ -57,23 +87,19 @@ def writePcmWavData(write_outputWavFileName, write_left, write_right, write_Samp
         sampleRate_Factor = 1
     if isFilter:
         print("[STEPS]Filtering...")
-        from scipy.signal import medfilt
         medfilt(write_left, FilterDistance)
         medfilt(write_right, FilterDistance)
     MixedData = npvstack((write_left.astype(write_dataType), write_right.astype(write_dataType))).T
     try:
         wavWrite(write_outputWavFileName, int(write_SampleRate / sampleRate_Factor), MixedData)
     except Exception:
-        from sys import stderr
-        from sys import exit
-        print("[ERROR]Read WAV file failed.",file=stderr)
+        print("[ERROR]Read WAV file failed.", file=stderr)
         exit(1)
 
 
 def reverb(reverb_SampleRate, reverb_left, reverb_right, echoFunction=reverb_funDefault, numberOfEcho=3,
            maxVolumeDb=2, offsetSecond=0.22, CONSTANT_REVERB_RANGE=12.0):
     print("[STEPS]Reverb Processing...")
-    from numpy import divide as npdivide
     offsetSample = int(offsetSecond * reverb_SampleRate)
     reverb_sum = 0.0
     factorArr = nplinspace(maxVolumeDb, maxVolumeDb * CONSTANT_REVERB_RANGE, numberOfEcho)
@@ -91,7 +117,6 @@ def reverb(reverb_SampleRate, reverb_left, reverb_right, echoFunction=reverb_fun
 
 def mixer(mixer_left, mixer_right, left_leftRate=1.0, left_rightRate=-1.0, right_leftRate=-1.0, right_rightRate=1.0):
     print("[STEPS]Mixing...")
-    from numpy import add as npadd
     left_out = npadd(mixer_left * left_leftRate, mixer_right * left_rightRate)
     right_out = npadd(mixer_left * right_leftRate, mixer_right * right_rightRate)
     return left_out, right_out
@@ -106,30 +131,36 @@ def gain(gain_left, gain_right, leftFactor=1.0, rightFactor=1.0, leftDB=0.0, rig
     return gain_left * leftFactor, gain_right * rightFactor
 
 
-# This function may not work well. And it takes a long time.
-def changeSpeed(left, right, dataType, frame_SampleLength=100):
-    out_left = []
-    out_right = []
-    for i in range(0, len(left), frame_SampleLength):
-        out_left.extend(left[i:i+frame_SampleLength])
-        out_left.extend(npzeros(1, dataType))
-    for i in range(0, len(right), frame_SampleLength):
-        out_right.extend(left[i:i+frame_SampleLength])
-        out_right.extend(npzeros(1, dataType))
-    return nparray(out_left), nparray(out_right)
+# This function uses Sonic library.
+# Copyright (c) 2010 Bill Cox.
+# File sonic.dll and its source code is licensed under the Apache 2.0 license.
+def pitch(pitch_left, pitch_right, pitch_dataType, input_sampleRate, output_sampleRate, pitchFactor=0.8,
+          lib_file=r"./sonic.dll"):
+    print("[STEPS]Pitching...")
+    pitch_left, pitch_right, current_datatype = changeBitRate(pitch_left, pitch_right, pitch_dataType, npint16)
+    wav_len = len(pitch_left)  # length of input
+    out_len = round(wav_len / pitchFactor)  # length of output.
+    # Call the compiled C library(sonic.dll).
+    lib = ctypes.cdll.LoadLibrary
+    sonic_lib = lib(lib_file)
+    wav_speech_change = sonic_lib.wavChangeSpeed
+    wav_speech_change.argtypes = [ndpointer(ctypes.c_short), ndpointer(
+        ctypes.c_short), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+    wav_speech_change.restypes = None
+    # ----left----
+    resultLeft = npzeros([out_len], dtype=current_datatype)  # must int16.
+    wav_speech_change(pitch_left, resultLeft, 1, input_sampleRate, pitch_left.shape[0], pitchFactor)
+    # ----right----
+    wav_len = len(pitch_right)  # length of input
+    out_len = round(wav_len / pitchFactor)  # length of output.
+    # Call the compiled C library(sonic.dll).
+    resultRight = npzeros([out_len], dtype=current_datatype)  # must int16.
+    wav_speech_change(pitch_right, resultRight, 1, input_sampleRate, pitch_left.shape[0], pitchFactor)
+    return resample(int(input_sampleRate / pitchFactor), output_sampleRate, resultLeft, resultRight)
 
 
 def showFrequencyDomainWave(sampleRate, waveData, fWave_dataType, fftSize=2048, offset=0, figSize=(8, 4)):
     print("[STEPS]Analysing Frequency Domain Wave...")
-    from pylab import plot
-    from pylab import figure
-    from pylab import xlabel
-    from pylab import ylabel
-    from pylab import show
-    from numpy import log10 as nplog10
-    from numpy import clip as npclip
-    from numpy import abs as npabs
-    from numpy.fft import rfft as nprfft
     typeFactor = getTypeFactor(fWave_dataType)
     xs = waveData[offset:fftSize + offset] / typeFactor
     xf = nprfft(xs) / fftSize
@@ -144,11 +175,6 @@ def showFrequencyDomainWave(sampleRate, waveData, fWave_dataType, fftSize=2048, 
 
 def showTimeDomainWave(sampleRate, waveData, timeWave_dataType, figSize=(8, 4), xLabelUnit='second'):
     print("[STEPS]Analysing Time Domain Wave...")
-    from pylab import plot
-    from pylab import figure
-    from pylab import xlabel
-    from pylab import ylabel
-    from pylab import show
     length = len(waveData)
     typeFactor = getTypeFactor(timeWave_dataType)
     figure("Time Domain Wave", figsize=figSize)
@@ -164,8 +190,6 @@ def showTimeDomainWave(sampleRate, waveData, timeWave_dataType, figSize=(8, 4), 
 
 def resample(original_sampleRate, current_sampleRate, resample_left, resample_right):
     print("[STEPS]Resample...")
-    from numpy import interp as npinterp
-    from numpy import arange as nparange
     factor = original_sampleRate * 1.0/current_sampleRate
     resample_left = npinterp(nparange(0, len(resample_left), factor), nparange(0, len(resample_left)), resample_left)
     resample_right = npinterp(nparange(0, len(resample_right), factor), nparange(0, len(resample_right)), resample_right)
@@ -177,11 +201,12 @@ def resample(original_sampleRate, current_sampleRate, resample_left, resample_ri
 # showMode=2:print both.
 def showInformation(showMode):
     if showMode == 0 or showMode == 2:
-        print("DuyuAudioProcessor-CORE v3.0")
-        print("Copyright (c) 2022 Qilu University of Technology, School of Computer Science & Technology, "
-              "Duyu (No.202103180009).")
+        print(r"DuyuAudioProcessor-CORE v3.2")
+        print(r"Copyright (c) 2022 Qilu University of Technology, School of Computer Science & Technology, "
+              r"Duyu (No.202103180009).")
+        print(r"Copyright (c) 2010 Bill Cox. (Sonic Library)")
     if showMode == 1 or showMode == 3:
-        print("Usage of DuyuPCMprocessor-CORE")
+        print(r"Usage of DuyuPCMprocessor-CORE")
         print()
         # Writing usage there.
 
@@ -197,8 +222,6 @@ def trim(sampleRate, start, end, trim_left, trim_right, UNIT="second"):
     try:
         return trim_left[startSample:endSample + 1], trim_right[startSample:endSample + 1]
     except Exception:
-        from sys import stderr
-        from sys import exit
         print("[ERROR]Can not trim.", file=stderr)
         exit(1)
 
@@ -219,65 +242,59 @@ def changeBitRate(cbr_left, cbr_right, original_dataType, current_dataType):
     print("[STEPS]Changing bit rate...")
     cbr_left = (cbr_left.astype(npfloat64) / getTypeFactor(original_dataType)) * getTypeFactor(current_dataType)
     cbr_right = (cbr_right.astype(npfloat64) / getTypeFactor(original_dataType)) * getTypeFactor(current_dataType)
-    return cbr_left, cbr_right, current_dataType
+    return cbr_left.astype(current_dataType), cbr_right.astype(current_dataType), current_dataType
 
 
-def addSilence(sampleRate, start, length, addSilence_left, addSilence_right, addSilence_dataType, UNIT="second"):
+# UNIT="second" or "sample", MODE="insert" or "override".
+def addSilence(sampleRate, start, length, addSilence_left, addSilence_right, addSilence_dataType,
+               UNIT="second", MODE="insert"):
     print("[STEPS]Adding silence...")
-    from numpy import insert as npinsert
     startSample = start
     lengthSample = length
     if UNIT.lower() == "second":
         startSample = start * sampleRate
         lengthSample = length * sampleRate
     try:
-        addSilence_left = npinsert(addSilence_left, start, npzeros(lengthSample, addSilence_dataType))
-        addSilence_right = npinsert(addSilence_right, start, npzeros(lengthSample, addSilence_dataType))
+        if MODE.lower() == "insert":
+            addSilence_left = npinsert(addSilence_left, startSample, npzeros(lengthSample, addSilence_dataType))
+            addSilence_right = npinsert(addSilence_right, startSample, npzeros(lengthSample, addSilence_dataType))
+        elif MODE.lower() == "override":
+            addSilence_left = npappend(npappend(addSilence_left[:startSample], npzeros(lengthSample, addSilence_dataType)), addSilence_left[startSample+lengthSample:])
+            addSilence_right = npappend(npappend(addSilence_right[:startSample], npzeros(lengthSample, addSilence_dataType)), addSilence_right[startSample+lengthSample:])
+        else:
+            print("[ERROR]Mode error.", file=stderr)
+            exit(1)
         return addSilence_left, addSilence_right
     except Exception:
-        from sys import stderr
-        from sys import exit
-        print("[ERROR]Can not adding silence.", file=stderr)
+        print("[ERROR]Can not adding silence piece.", file=stderr)
         exit(1)
 
 
-# test
+# Test & Demo.
 if __name__ == '__main__':
     print("[STEPS]Loading Basic Modules...")
-    # Basic function and constant.
-    from numpy import append as npappend
-    from numpy import zeros as npzeros
-    from numpy import float64 as npfloat64
-    from numpy import float32 as npfloat32
-    from numpy import int16 as npint16
-    from numpy import int32 as npint32
-    from numpy import array as nparray
-    from numpy import linspace as nplinspace
-    from warnings import filterwarnings
-    from sys import argv
-
     filterwarnings('ignore')
-    CommandLineArguments = argv
+    CommandLineArguments = argv  # We can use commandline to start this program.
     inputWavFileName01 = r"C:\Users\35834\Desktop\CORE.wav"
-    inputWavFileName02 = r"C:\Users\35834\Desktop\CORE2.wav"
-    outputWavFileName = r"C:\Users\35834\Desktop\CORE2_OUT.wav"
+    # inputWavFileName02 = r"C:\Users\35834\Desktop\CORE02.wav"
+    outputWavFileName = r"C:\Users\35834\Desktop\CORE_OUT.wav"
     SampleRate, left, right, dataType = readPcmWavData(inputWavFileName01)
-    SampleRate02, left02, right02, dataType02 = readPcmWavData(inputWavFileName02)
-    SampleRate, left, right, dataType = joint(left, left02, right, right02, SampleRate, SampleRate02, 90000, dataType, dataType02, npint32)
+    # SampleRate02, left02, right02, dataType02 = readPcmWavData(inputWavFileName02)
+    # SampleRate, left, right, dataType = joint(left, left02, right, right02, SampleRate, SampleRate02, 90000, dataType, dataType02, npint32)
     # left, right = reverb(SampleRate, left, right)
     # left, right = mixer(left, right)
     # left, right = gain(left, right, 2, 2)
-    # left, right = changeSpeed(left, right, 16, 8)
     # showFrequencyDomainWave(SampleRate, left, dataType, offset=900000)
     # showTimeDomainWave(SampleRate, left, dataType)
-    # left, right = changeSpeed(left, right, dataType)
     # SampleRate, left, right = resample(SampleRate, 94321, left, right)
     # showInformation(0)
     # left, right = trim(SampleRate, 20, 30, left, right)
     # left, right, dataType = changeBitRate(left, right, dataType, npfloat32)
+    # SampleRate, left, right = pitch(left, right, dataType, SampleRate, 44100)
+    # left, right = addSilence(SampleRate, 5, 6, left, right, dataType, MODE="override")
     writePcmWavData(outputWavFileName, left, right, SampleRate, dataType, isFilter=True)
     print("[STEPS]Completed.")
 
-    
 # 2022/07/05 v2.0
 # 2022/07/11 v3.0/v3.1
+# 2022/07/12 v3.2
