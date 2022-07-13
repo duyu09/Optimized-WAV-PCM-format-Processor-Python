@@ -3,7 +3,13 @@ Optimized Python source code for processing WAV(PCM) audio.
 
 Copyright (c) 2022 Qilu University of Technology, School of Computer Science & Technology, Duyu (No.202103180009).
 
+Copyright (c) 2010 Bill Cox.
+
 All rights reserved.
+
+According to the Apache 2.0 license, any natural person or non-profit organization can use, modify, and distribute part or all of the source code of the software without charge, but not for commercial or other for-profit purposes.
+
+根据阿帕奇2.0协议(Apache 2.0 License)， 任何自然人或非营利性的团体均可无偿使用，修改，并发布本软件源代码的部分或全部，但不可用于商业等营利性用途。
 
 ## Update on July 11th
 
