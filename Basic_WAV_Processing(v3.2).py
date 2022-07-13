@@ -135,7 +135,7 @@ def gain(gain_left, gain_right, leftFactor=1.0, rightFactor=1.0, leftDB=0.0, rig
 # Copyright (c) 2010 Bill Cox.
 # File sonic.dll and its source code is licensed under the Apache 2.0 license.
 def pitch(pitch_left, pitch_right, pitch_dataType, input_sampleRate, output_sampleRate, pitchFactor=0.8,
-          lib_file=r"./sonic.dll"):
+          speedFactor=1.0, lib_file=r"./sonic.dll"):
     print("[STEPS]Pitching...")
     pitch_left, pitch_right, current_datatype = changeBitRate(pitch_left, pitch_right, pitch_dataType, npint16)
     wav_len = len(pitch_left)  # length of input
@@ -147,16 +147,28 @@ def pitch(pitch_left, pitch_right, pitch_dataType, input_sampleRate, output_samp
     wav_speech_change.argtypes = [ndpointer(ctypes.c_short), ndpointer(
         ctypes.c_short), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
     wav_speech_change.restypes = None
-    # ----left----
+    # ----left pitch----
     resultLeft = npzeros([out_len], dtype=current_datatype)  # must int16.
     wav_speech_change(pitch_left, resultLeft, 1, input_sampleRate, pitch_left.shape[0], pitchFactor)
-    # ----right----
+    # ----right pitch----
     wav_len = len(pitch_right)  # length of input
     out_len = round(wav_len / pitchFactor)  # length of output.
     # Call the compiled C library(sonic.dll).
     resultRight = npzeros([out_len], dtype=current_datatype)  # must int16.
     wav_speech_change(pitch_right, resultRight, 1, input_sampleRate, pitch_left.shape[0], pitchFactor)
-    return resample(int(input_sampleRate / pitchFactor), output_sampleRate, resultLeft, resultRight)
+    current_sampleRate, resultLeft, resultRight = resample(int(input_sampleRate / pitchFactor), output_sampleRate, resultLeft, resultRight)
+    if not speedFactor == 1.0:
+        print("[STEPS]Change speed...")
+        resultLeft, resultRight, current_datatype = changeBitRate(resultLeft, resultRight, resultLeft.dtype, npint16)
+        # ----left speed----
+        out_resultLeft = npzeros([out_len], dtype=current_datatype)  # must int16.
+        wav_speech_change(resultLeft, out_resultLeft, 1, current_sampleRate, resultLeft.shape[0], speedFactor)
+        # ----right speed----
+        out_resultRight = npzeros([out_len], dtype=current_datatype)  # must int16.
+        wav_speech_change(resultRight, out_resultRight, 1, current_sampleRate, resultRight.shape[0], speedFactor)
+    else:
+        out_resultLeft, out_resultRight = resultLeft, resultRight
+    return current_sampleRate, out_resultLeft, out_resultRight
 
 
 def showFrequencyDomainWave(sampleRate, waveData, fWave_dataType, fftSize=2048, offset=0, figSize=(8, 4)):
@@ -284,9 +296,9 @@ if __name__ == '__main__':
     # left, right = reverb(SampleRate, left, right)
     # left, right = mixer(left, right)
     # left, right = gain(left, right, 2, 2)
-    # showFrequencyDomainWave(SampleRate, left, dataType, offset=900000)
+    # showFrequencyDomainWave(SampleRate, left, dataType, offset=500000)
     # showTimeDomainWave(SampleRate, left, dataType)
-    # SampleRate, left, right = resample(SampleRate, 94321, left, right)
+    # SampleRate, left, right = resample(SampleRate, 44100, left, right)
     # showInformation(0)
     # left, right = trim(SampleRate, 20, 30, left, right)
     # left, right, dataType = changeBitRate(left, right, dataType, npfloat32)
