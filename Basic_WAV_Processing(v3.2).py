@@ -161,9 +161,13 @@ def pitch(pitch_left, pitch_right, pitch_dataType, input_sampleRate, output_samp
         print("[STEPS]Change speed...")
         resultLeft, resultRight, current_datatype = changeBitRate(resultLeft, resultRight, resultLeft.dtype, npint16)
         # ----left speed----
+        wav_len = len(resultLeft)  # length of input
+        out_len = round(wav_len / speedFactor)  # length of output.
         out_resultLeft = npzeros([out_len], dtype=current_datatype)  # must int16.
         wav_speech_change(resultLeft, out_resultLeft, 1, current_sampleRate, resultLeft.shape[0], speedFactor)
         # ----right speed----
+        wav_len = len(resultRight)  # length of input
+        out_len = round(wav_len / speedFactor)  # length of output.
         out_resultRight = npzeros([out_len], dtype=current_datatype)  # must int16.
         wav_speech_change(resultRight, out_resultRight, 1, current_sampleRate, resultRight.shape[0], speedFactor)
     else:
