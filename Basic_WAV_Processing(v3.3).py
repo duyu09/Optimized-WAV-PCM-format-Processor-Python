@@ -347,9 +347,6 @@ if __name__ == '__main__':
     left = nparray([])
     right = nparray([])
 
-    if args.outputFileName is not None:
-        outputWavFileName = args.outputFileName[0]
-
     if args.output_option is not None:
         out_SampleRate = int(args.output_option[0])
         out_BitDepth = int(args.output_option[1])
@@ -382,6 +379,9 @@ if __name__ == '__main__':
         SampleRate, left, right, dataType = readPcmWavData(inputWavFileName01)
 
     outputWavFileName = inputWavFileName01 + "_OUT.WAV"  # Default output file name.
+    if args.outputFileName is not None:
+        outputWavFileName = args.outputFileName[0]
+        
     if args.overwrite == False and os.path.exists(outputWavFileName):
         print("[ERROR]File already exists. You can use '--overwrite' option to skip it.", file=stderr)
         exit(1)
@@ -408,7 +408,7 @@ if __name__ == '__main__':
 
     if args.gain is not None:
         valueLeft, valueRight, Unit = float(args.gain[0]), float(args.gain[1]), args.gain[2]
-        if not Unit.lower() == "factor" or not Unit.lower() == "db":
+        if not Unit.lower() == "factor" and not Unit.lower() == "db":
             print("[ERROR]Unit Error.", file=stderr)
             exit(1)
         left, right = gain(left, right, valueLeft, valueRight, mode=Unit)
